@@ -1,0 +1,95 @@
+---
+title: "Laboratorio"
+author: "Enrique Sayas Bailach"
+date: "29/9/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(forecast)
+library(readr)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+```
+
+## Introducción
+
+Los dos datasets utilizados han sido descargados desde Kaggle.
+
+El utilizado para la serie temporal con tendencia es [annual_gold_rate](https://www.kaggle.com/datasets/hemil26/gold-rates-1985-jan-2022), que muestra el valor anual del oro desde 1980 hasta 2022 en Dirham de los Emiratos Árabes Unidos.
+
+Por otra parte, el dataset utilizado para la serie temporal con tendencia y estacionalidad es [HospitalityEmployees](https://www.kaggle.com/datasets/gabrielsantello/hospitality-employees-time-series-dataset/data), que muestra el número de empleados en la hostelería en California desde enero de 1990 hasta diciembre de 2018.
+
+## Tendencia
+
+#### Importamos los datos
+
+```{r}
+gold <- read_csv("Datos/annual_gold_rate.csv", 
+    col_types = cols(Date = col_date(format = "%Y-%m-%d")))
+```
+
+#### Creación de la serie temporal
+
+```{r}
+attach(gold)
+gold_ts <- ts(AED,start=c(1980),frequency=1)
+plot(gold_ts)
+```
+
+Se puede observar que hay una tendencia 
+
+## Estacionalidad y Tendencia
+
+```{r}
+HospitalityEmployees <- read_csv("Datos/HospitalityEmployees.csv")
+HospitalityEmployees$Date <- as.Date(HospitalityEmployees$Date, format = "%m/%d/%Y")
+HospitalityEmployees$Employees <- floor(HospitalityEmployees$Employees)
+```
+
+```{r}
+attach(HospitalityEmployees)
+HospitalityEmployees_ts <- ts(Employees,start=c(1990,1),end=c(2018,12),frequency=12)
+HospEmp2010_ts <- window(HospitalityEmployees_ts, start = c(2010,1))
+plot(HospEmp2010_ts)
+```
+
+```{r}
+tend <- aggregate(HospEmp2010_ts, FUN = mean)
+```
+
+```{r}
+plot(tend)
+```
+
+```{r}
+HospEmp2010 <- HospitalityEmployees %>% mutate(mes = month(Date),
+                                               anyo = year(Date)) %>% 
+  filter(anyo >= 2010)
+```
+
+```{r}
+boxplot(HospEmp2010$Employees ~ HospEmp2010$mes)
+```
+
+```{r}
+plot(decompose(HospEmp2010_ts, type="additive"))
+```
+
+```{r}
+ggplot(data = as.data.frame(HospEmp2010_ts),
+       aes(x = c(1:length(HospEmp2010_ts)),
+           y = HospEmp2010_ts)) +
+  geom_smooth(se = FALSE) +
+  geom_line() +
+  xlab("Tiempo") +
+  ylab("Nº Empledos en miles de personas") +
+  labs(title = "Evolución del número de empleados en la Hostelería") +
+  theme_minimal()
+```
+
