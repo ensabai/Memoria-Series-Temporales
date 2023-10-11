@@ -42,7 +42,7 @@ gold_ts <- ts(AED,start=c(1980),frequency=1)
 plot(gold_ts)
 ```
 
-Se puede observar que hay una tendencia 
+Se puede observar que hay una tendencia.
 
 ## Estacionalidad y Tendencia
 
