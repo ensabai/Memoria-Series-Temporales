@@ -2,7 +2,9 @@
 title: "Laboratorio"
 author: "Enrique Sayas Bailach"
 date: "29/9/2023"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -25,16 +27,18 @@ El utilizado para la serie temporal con tendencia es [annual_gold_rate](https://
 
 Por otra parte, el dataset utilizado para la serie temporal con tendencia y estacionalidad es [HospitalityEmployees](https://www.kaggle.com/datasets/gabrielsantello/hospitality-employees-time-series-dataset/data), que muestra el número de empleados en la hostelería en California desde enero de 1990 hasta diciembre de 2018.
 
+# Parte 1
+
 ## Tendencia
 
-#### Importamos los datos
+### Importamos los datos
 
 ```{r}
 gold <- read_csv("Datos/annual_gold_rate.csv", 
     col_types = cols(Date = col_date(format = "%Y-%m-%d")))
 ```
 
-#### Creación de la serie temporal
+### Creación de la serie temporal
 
 ```{r}
 attach(gold)
@@ -92,4 +96,204 @@ ggplot(data = as.data.frame(HospEmp2010_ts),
   labs(title = "Evolución del número de empleados en la Hostelería") +
   theme_minimal()
 ```
+
+# Parte 2
+
+## Serie temporal con tendencia
+
+En base a la evolución temporal del valor del oro, se puede observar que existe una tendencia pero no una estacionalidad.
+
+Por tanto, el mejor modelo de suavizado exponencial será el modelo de Host.
+
+Las ecuaciones de observación y actualización del modelo son las siguientes:
+
+$$
+\hat{x}_t=L_{t-1} + T_{t-1}
+$$
+$$
+L_t = \alpha \cdot x_t + (1-\alpha) \cdot (L_{t-1}+T_{t-1})
+$$
+$$
+T_t = \beta \cdot (L_t-L_{t-1}) + (1-\beta) \cdot T_{t-1}
+$$
+
+Ecuación de predicción:
+
+$$
+\hat{x}_{n+k} = L_n + k \cdot T_{n}
+$$
+
+### Creación del modelo
+
+```{r}
+gold_holt <- HoltWinters(gold_ts, gamma = FALSE)
+```
+
+Visualimos los coeficientes y los parámetros
+
+```{r}
+gold_holt$coefficients
+```
+
+```{r}
+gold_holt$alpha
+```
+
+```{r}
+gold_holt$beta
+```
+
+Al ser $\alpha = 1$, sólo se tendrá en cuenta el valor anterior para calcular el nivel del valor siguiente.
+
+A partir de los coeficientes obtenidos calculamos las ecuaciones de actualización:
+
+$$
+L_t = x_t
+$$
+$$
+T_t = 0.6672362 \cdot (L_t-L_{t-1}) + (1-0.6672362) \cdot T_{t-1}
+$$
+
+Y la ecuación de predicción:
+
+$$
+\hat{x}_{n+k} = 6611.71 + k \cdot 141.3085
+$$
+
+### Cálculo de la bondad del ajuste
+
+```{r}
+fitval_gold <- fitted(gold_holt)
+tail(fitval_gold, 10)
+```
+
+```{r}
+rmse <- sqrt(mean((gold_ts - fitval_gold[,1])^2))
+rmse
+```
+
+```{r}
+mape <- 100*mean(abs(gold_ts-fitval_gold[,1])/gold_ts)
+mape
+```
+
+A partir del mape se puede concluir que se tiene un error medio del 9.89%.
+
+### Representación de la serie real frente a la serie ajustada
+
+```{r}
+plot(gold_holt)
+```
+
+En el gráfico se puede observar el error medio del 9.89% respecto a la serie original.
+
+### Predicción para h=2
+
+```{r}
+pred_gold <- predict(gold_holt,2)
+```
+
+### Representación de la predicción junto a la serie
+
+```{r}
+ts.plot(gold_ts,pred_gold,lty=1:2)
+```
+
+## Serie temporal con tendencia + estacionalidad
+
+En base a la evolución temporal del número de empleados en la hostelería, se puede observar que existe una tendencia y una estacionalidad aditiva.
+
+Por tanto, el mejor modelo de suavizado exponencial será el modelo de Host-Winters con estacionalidad aditiva.
+
+Las ecuaciones de observación y actualización del modelo son las siguientes:
+
+$$
+\hat{x}_t = L_{t-1} + T_{t-1} + S_{t-c}
+$$
+
+$$
+L_t = \alpha \cdot (x_{t}-S_{t-c}) + (1-\alpha) \cdot (L_{t-1} + T_{t-1})
+$$
+$$
+T_t = \beta \cdot (L_t - L_{t-1}) + (1 - \beta) \cdot T_{t-1}
+$$
+
+$$
+S_t = \gamma \cdot (x_t - L_t) + (1 - \gamma) \cdot S_{t-c}
+$$
+
+Y la ecuación de predicción:
+
+$$
+\hat{x}_{n+k} = L_n + k\cdot T_n + S_{n+k-c}
+$$
+
+### Creación del modelo
+
+```{r}
+emp_fit <- HoltWinters(HospEmp2010_ts, seasonal = "additive")
+```
+
+Visualizamos los coeficientes y los parámetros
+
+```{r}
+emp_fit$coefficients
+```
+
+```{r}
+emp_fit$alpha
+```
+
+```{r}
+emp_fit$beta
+```
+
+```{r}
+emp_fit$gamma
+```
+
+Al ser $\beta = 0.055$ la tendencia es constante y como $\gamma = 1$, la estacionalidad la calculará a través de la diferencia entre el valor de $x_t$ y $L_t$.
+
+A partir de los coeficientes obtenidos calculamos las ecuaciones de actualización:
+
+$$
+L_t = 0.6583277 \cdot (x_t - S_{t-12}) + (1-0.6583277) \cdot(L_{t-1} + T_{t-1})
+$$
+$$
+T_t = 0.05505944 \cdot (L_t-L_{t-1}) + (1-0.05505944) \cdot T_{t-1}
+$$
+$$
+S_t = x_t - L_t
+$$
+
+Y la ecuación de predicción
+
+$$
+\hat{x}_{n+k} = 2009.266255 + k \cdot 4.174587 + S_{n+k-12}
+$$
+### Cálculo de la bondad del ajuste
+
+```{r}
+fitval_emp <- fitted(emp_fit)
+tail(fitval_emp, 10)
+```
+
+```{r}
+rmse <- sqrt(mean((HospEmp2010_ts - fitval_emp[,1])^2))
+rmse
+```
+
+```{r}
+mape <- 100*mean(abs(HospEmp2010_ts - fitval_emp[,1])/HospEmp2010_ts)
+mape
+```
+
+El ajuste es muy bueno pues sólo se tiene un error medio del 0.28%.
+
+### Representación de la serie real frente a la serie ajustada
+
+```{r}
+plot(emp_fit)
+```
+
 
