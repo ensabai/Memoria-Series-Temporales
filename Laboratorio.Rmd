@@ -1,7 +1,7 @@
 ---
-title: "Laboratorio"
-author: "Enrique Sayas Bailach"
-date: "29/9/2023"
+title: "Memoria de Series Temporales"
+author: "Enrique Sayas Bailach y Carlos Gila Blanco"
+date: "`r Sys.Date()`"
 output:
   pdf_document: default
   html_document: default
@@ -11,6 +11,16 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Introducción
+
+Los dos datasets utilizados han sido descargados desde Kaggle.
+
+El utilizado para la serie temporal con tendencia es [annual_gold_rate](https://www.kaggle.com/datasets/hemil26/gold-rates-1985-jan-2022), que muestra el valor anual del oro desde 1980 hasta 2022 en Dirham de los Emiratos Árabes Unidos.
+
+Por otra parte, el dataset utilizado para la serie temporal con tendencia y estacionalidad es [HospitalityEmployees](https://www.kaggle.com/datasets/gabrielsantello/hospitality-employees-time-series-dataset/data), que muestra el número de empleados en la hostelería en California desde enero de 1990 hasta diciembre de 2018.
+
+# Carga de librerías
+
 ```{r}
 library(forecast)
 library(readr)
@@ -19,19 +29,9 @@ library(dplyr)
 library(ggplot2)
 ```
 
-## Introducción
+# Serie temporal con tendencia
 
-Los dos datasets utilizados han sido descargados desde Kaggle.
-
-El utilizado para la serie temporal con tendencia es [annual_gold_rate](https://www.kaggle.com/datasets/hemil26/gold-rates-1985-jan-2022), que muestra el valor anual del oro desde 1980 hasta 2022 en Dirham de los Emiratos Árabes Unidos.
-
-Por otra parte, el dataset utilizado para la serie temporal con tendencia y estacionalidad es [HospitalityEmployees](https://www.kaggle.com/datasets/gabrielsantello/hospitality-employees-time-series-dataset/data), que muestra el número de empleados en la hostelería en California desde enero de 1990 hasta diciembre de 2018.
-
-# Parte 1
-
-## Tendencia
-
-### Importamos los datos
+### Importación de los datos
 
 ```{r}
 gold <- read_csv("Datos/annual_gold_rate.csv", 
@@ -43,7 +43,7 @@ gold <- read_csv("Datos/annual_gold_rate.csv",
 ```{r}
 attach(gold)
 gold_ts <- ts(AED,start=c(1980),frequency=1)
-plot(gold_ts)
+plot(gold_ts, ylab = "Gold Value (AED)")
 ```
 
 Se puede observar que hay una tendencia.
@@ -57,7 +57,7 @@ Por tanto, el mejor modelo de suavizado exponencial será el modelo de Host.
 Las ecuaciones de observación y actualización del modelo son las siguientes:
 
 $$
-x_t=L_{t-1} + T_{t-1} +\epsilon, \epsilon \sim N(0,\sigma^2)
+\hat{x}_t=L_{t-1} + T_{t-1} +\epsilon_t, \epsilon_t \sim N(0,\sigma^2)
 $$
 $$
 L_t = \alpha \cdot x_t + (1-\alpha) \cdot (L_{t-1}+T_{t-1})
@@ -78,7 +78,7 @@ $$
 gold_holt <- HoltWinters(gold_ts, gamma = FALSE)
 ```
 
-Visualimos los coeficientes y los parámetros
+### Visualización de los coeficientes y los parámetros
 
 ```{r}
 gold_holt$coefficients
@@ -126,7 +126,7 @@ mape <- 100*mean(abs(gold_ts-fitval_gold[,1])/gold_ts)
 mape
 ```
 
-A partir del mape se puede concluir que se tiene un error medio del 9.89%.
+A partir del MAPE se puede concluir que se tiene un error medio del 9.89%.
 
 ### Representación de la serie real frente a la serie ajustada
 
@@ -145,10 +145,12 @@ pred_gold <- predict(gold_holt,2)
 ### Representación de la predicción junto a la serie
 
 ```{r}
-ts.plot(gold_ts,pred_gold,lty=1:2)
+pred <- predict(gold_holt,n.ahead=4,prediction.interval=TRUE,level=0.95) 
+
+plot(gold_holt, pred)
 ```
 
-## Serie temporal con tendencia + estacionalidad
+# Serie temporal con tendencia + estacionalidad
 
 ### Importación y Adecuación de la serie
 
@@ -164,7 +166,7 @@ HospitalityEmployees$Employees <- floor(HospitalityEmployees$Employees)
 attach(HospitalityEmployees)
 HospitalityEmployees_ts <- ts(Employees,start=c(1990,1),end=c(2018,12),frequency=12)
 HospEmp2010_ts <- window(HospitalityEmployees_ts, start = c(2010,1))
-plot(HospEmp2010_ts)
+plot(HospEmp2010_ts, ylab = "Hospitality Employees")
 ```
 
 ### Descripción de la serie
@@ -183,11 +185,11 @@ Modelo Holt-Winters con estacionalidad aditiva
 emp_ad <- HoltWinters(HospEmp2010_ts, seasonal = "additive")
 fit_emp_ad <- fitted(emp_ad)
 
-#rmse
+#RMSE
 rmse_ad <- sqrt(mean((HospEmp2010_ts - fit_emp_ad[,1])^2))
 rmse_ad
 
-#mape
+#MAPE
 mape_ad <- 100*mean(abs(HospEmp2010_ts-fit_emp_ad[,1])/HospEmp2010_ts)
 mape_ad
 ```
@@ -198,11 +200,11 @@ Modelo Holt-Winters con estacionalidad multiplicativa
 emp_mult <- HoltWinters(HospEmp2010_ts, seasonal = "multiplicative")
 fit_emp_mult <- fitted(emp_mult)
 
-#rmse
+#RMSE
 rmse_mult <- sqrt(mean((HospEmp2010_ts - fit_emp_mult[,1])^2))
 rmse_mult
 
-#mape
+#MAPE
 mape_mult <- 100*mean(abs(HospEmp2010_ts-fit_emp_mult[,1])/HospEmp2010_ts)
 mape_mult
 ```
@@ -222,7 +224,7 @@ El mejor modelo de suavizado exponencial será el modelo de Host-Winters con est
 Las ecuaciones de observación y actualización del modelo son las siguientes:
 
 $$
-\hat{x}_t = L_{t-1} + T_{t-1} + S_{t-c}
+\hat{x}_t = L_{t-1} + T_{t-1} + S_{t-c} +\epsilon_t, \epsilon_t \sim N(0,\sigma^2)
 $$
 
 $$
@@ -248,7 +250,7 @@ $$
 emp_fit <- HoltWinters(HospEmp2010_ts, seasonal = "additive")
 ```
 
-Visualizamos los coeficientes y los parámetros
+### Visualización de los coeficientes y los parámetros
 
 ```{r}
 emp_fit$coefficients
@@ -293,17 +295,6 @@ fitval_emp <- fitted(emp_fit)
 tail(fitval_emp, 10)
 ```
 
-```{r}
-rmse <- sqrt(mean((HospEmp2010_ts - fitval_emp[,1])^2))
-rmse
-```
-
-```{r}
-mape <- 100*mean(abs(HospEmp2010_ts - fitval_emp[,1])/HospEmp2010_ts)
-mape
-```
-
-El ajuste es muy bueno pues sólo se tiene un error medio del 0.28%.
 
 ### Representación de la serie real frente a la serie ajustada
 
@@ -311,4 +302,16 @@ El ajuste es muy bueno pues sólo se tiene un error medio del 0.28%.
 plot(emp_fit)
 ```
 
+### Predicción para h=c
 
+```{r}
+pred_hosp <- predict(emp_fit,12)
+```
+
+### Representación de la predicción junto a la serie
+
+```{r}
+pred <- predict(emp_fit,n.ahead=12,prediction.interval=TRUE,level=0.95) 
+
+plot(emp_fit, pred)
+```
