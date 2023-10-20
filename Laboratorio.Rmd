@@ -48,57 +48,6 @@ plot(gold_ts)
 
 Se puede observar que hay una tendencia.
 
-## Estacionalidad y Tendencia
-
-```{r}
-HospitalityEmployees <- read_csv("Datos/HospitalityEmployees.csv")
-HospitalityEmployees$Date <- as.Date(HospitalityEmployees$Date, format = "%m/%d/%Y")
-HospitalityEmployees$Employees <- floor(HospitalityEmployees$Employees)
-```
-
-```{r}
-attach(HospitalityEmployees)
-HospitalityEmployees_ts <- ts(Employees,start=c(1990,1),end=c(2018,12),frequency=12)
-HospEmp2010_ts <- window(HospitalityEmployees_ts, start = c(2010,1))
-plot(HospEmp2010_ts)
-```
-
-```{r}
-tend <- aggregate(HospEmp2010_ts, FUN = mean)
-```
-
-```{r}
-plot(tend)
-```
-
-```{r}
-HospEmp2010 <- HospitalityEmployees %>% mutate(mes = month(Date),
-                                               anyo = year(Date)) %>% 
-  filter(anyo >= 2010)
-```
-
-```{r}
-boxplot(HospEmp2010$Employees ~ HospEmp2010$mes)
-```
-
-```{r}
-plot(decompose(HospEmp2010_ts, type="additive"))
-```
-
-```{r}
-ggplot(data = as.data.frame(HospEmp2010_ts),
-       aes(x = c(1:length(HospEmp2010_ts)),
-           y = HospEmp2010_ts)) +
-  geom_smooth(se = FALSE) +
-  geom_line() +
-  xlab("Tiempo") +
-  ylab("Nº Empledos en miles de personas") +
-  labs(title = "Evolución del número de empleados en la Hostelería") +
-  theme_minimal()
-```
-
-# Parte 2
-
 ## Serie temporal con tendencia
 
 En base a la evolución temporal del valor del oro, se puede observar que existe una tendencia pero no una estacionalidad.
@@ -108,7 +57,7 @@ Por tanto, el mejor modelo de suavizado exponencial será el modelo de Host.
 Las ecuaciones de observación y actualización del modelo son las siguientes:
 
 $$
-\hat{x}_t=L_{t-1} + T_{t-1}
+x_t=L_{t-1} + T_{t-1} +\epsilon, \epsilon \sim N(0,\sigma^2)
 $$
 $$
 L_t = \alpha \cdot x_t + (1-\alpha) \cdot (L_{t-1}+T_{t-1})
@@ -201,9 +150,74 @@ ts.plot(gold_ts,pred_gold,lty=1:2)
 
 ## Serie temporal con tendencia + estacionalidad
 
-En base a la evolución temporal del número de empleados en la hostelería, se puede observar que existe una tendencia y una estacionalidad aditiva.
+### Importación y Adecuación de la serie
 
-Por tanto, el mejor modelo de suavizado exponencial será el modelo de Host-Winters con estacionalidad aditiva.
+```{r}
+HospitalityEmployees <- read_csv("Datos/HospitalityEmployees.csv")
+HospitalityEmployees$Date <- as.Date(HospitalityEmployees$Date, format = "%m/%d/%Y")
+HospitalityEmployees$Employees <- floor(HospitalityEmployees$Employees)
+```
+
+### Representación de la serie temporal
+
+```{r}
+attach(HospitalityEmployees)
+HospitalityEmployees_ts <- ts(Employees,start=c(1990,1),end=c(2018,12),frequency=12)
+HospEmp2010_ts <- window(HospitalityEmployees_ts, start = c(2010,1))
+plot(HospEmp2010_ts)
+```
+
+### Descripción de la serie
+
+```{r}
+plot(decompose(HospEmp2010_ts, type="additive"))
+```
+
+En base a la evolución temporal del número de empleados en la hostelería, se puede observar que existe una tendencia y una estacionalidad.
+
+### Comparación de los modelos
+
+Modelo Holt-Winters con estacionalidad aditiva
+
+```{r}
+emp_ad <- HoltWinters(HospEmp2010_ts, seasonal = "additive")
+fit_emp_ad <- fitted(emp_ad)
+
+#rmse
+rmse_ad <- sqrt(mean((HospEmp2010_ts - fit_emp_ad[,1])^2))
+rmse_ad
+
+#mape
+mape_ad <- 100*mean(abs(HospEmp2010_ts-fit_emp_ad[,1])/HospEmp2010_ts)
+mape_ad
+```
+
+Modelo Holt-Winters con estacionalidad multiplicativa
+
+```{r}
+emp_mult <- HoltWinters(HospEmp2010_ts, seasonal = "multiplicative")
+fit_emp_mult <- fitted(emp_mult)
+
+#rmse
+rmse_mult <- sqrt(mean((HospEmp2010_ts - fit_emp_mult[,1])^2))
+rmse_mult
+
+#mape
+mape_mult <- 100*mean(abs(HospEmp2010_ts-fit_emp_mult[,1])/HospEmp2010_ts)
+mape_mult
+```
+
+Comparación entre los modelos Holt-Winters aditivo y multiplicativo en base a los errores RMSE y MAPE
+
+$$
+\begin{tabular}{| c | c | c |}
+\hline
+    Holt-Winters & RMSE & MAPE \\ \hline
+    Additive & 6.192158 & 0.2809599\\ \hline
+    Multiplicative & 5.668459 & 0.2562788 \\ \hline
+\end{tabular} 
+$$
+El mejor modelo de suavizado exponencial será el modelo de Host-Winters con estacionalidad aditiva pues la diferencia en el RMSE entre ambos modelos es muy pequeña, siendo más fácil la implementación del modelo con estacionalidad aditiva.
 
 Las ecuaciones de observación y actualización del modelo son las siguientes:
 
@@ -271,6 +285,7 @@ Y la ecuación de predicción
 $$
 \hat{x}_{n+k} = 2009.266255 + k \cdot 4.174587 + S_{n+k-12}
 $$
+
 ### Cálculo de la bondad del ajuste
 
 ```{r}
