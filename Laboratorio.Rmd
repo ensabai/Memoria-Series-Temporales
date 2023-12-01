@@ -46,18 +46,16 @@ gold_ts <- ts(AED,start=c(1980),frequency=1)
 plot(gold_ts, ylab = "Gold Value (AED)")
 ```
 
-Se puede observar que hay una tendencia.
-
-## Serie temporal con tendencia
-
 En base a la evolución temporal del valor del oro, se puede observar que existe una tendencia pero no una estacionalidad.
 
-Por tanto, el mejor modelo de suavizado exponencial será el modelo de Host.
+## Modelo de suavizado exponencial
+
+Por tanto, el mejor modelo de suavizado exponencial será el modelo de Holt.
 
 Las ecuaciones de observación y actualización del modelo son las siguientes:
 
 $$
-\hat{x}_t=L_{t-1} + T_{t-1} +\epsilon_t, \epsilon_t \sim N(0,\sigma^2)
+\hat{x}_t=L_{t-1} + T_{t-1}
 $$
 $$
 L_t = \alpha \cdot x_t + (1-\alpha) \cdot (L_{t-1}+T_{t-1})
@@ -139,15 +137,92 @@ En el gráfico se puede observar el error medio del 9.89% respecto a la serie or
 ### Predicción para h=2
 
 ```{r}
-pred_gold <- predict(gold_holt,2)
+pred_gold <- predict(gold_holt,n.ahead=2,prediction.interval=TRUE,level=0.95) 
 ```
 
 ### Representación de la predicción junto a la serie
 
 ```{r}
-pred <- predict(gold_holt,n.ahead=4,prediction.interval=TRUE,level=0.95) 
+plot(gold_holt, pred_gold)
+```
 
-plot(gold_holt, pred)
+## Modelo ARIMA
+
+### Transformación de la serie (si es necesario) a un proceso estacionario
+
+Como se ha visto previamente, la serie temporal tiene una tendencia creciente por lo que será necesario transformarla a estacionaria. Para saber el número de diferencias necesarias se hará uso de la función ndiffs.
+
+```{r}
+ndiffs(gold_ts)
+```
+
+ndiffs devuelve que para que sea estacionaria se deberá realizar una diferencia.
+
+```{r}
+gold_diff_ts <- diff(gold_ts)
+plot(gold_diff_ts)
+```
+
+### Representación gráfica e interpretación de la función de autocorrelación y de autocorrelación parcial
+
+```{r}
+acf(gold_diff_ts)
+```
+
+A partir de la función de autocorrelación, se observa que hay únicamente un valor relevente. De este modo, se puede suponer un MA(1). Sin embargo, se puede considerar que existe un decrecimiento por lo que usaremos también un AR().
+
+```{r}
+pacf(gold_diff_ts)
+```
+
+Se observa un decrecimiento en la función de autocorrelación parcial, por lo que se puede confirmar el MA(1). Asimismo, se puede considerar que existe únicamente un valor relevante y el resto nulos, entonces se estaría frente a un AR(1).
+
+### Encuentra el modelo ARIMA(p,d,q) que mejor describe la serie y escribe su ecuación
+
+Inicialmente se utilizará el modelo MA(1) con una diferencia:
+
+```{r}
+ma.fitted <- arima(gold_ts,order = c(0,1,1))
+ma.fitted
+```
+
+Modelo AR(1) con una diferencia:
+```{r}
+ar.fitted <- arima(gold_ts, order = c(1,1,0))
+ar.fitted
+```
+Comparamos los resultados con la función auto.arima
+
+```{r}
+auto.arima(gold_ts)
+```
+
+Debido a la poca diferencia entre los modelos detectados y el devuelto por la función auto.arima, se empleará el modelo AR(1).
+
+### Cálculo de la bondad del ajuste
+
+```{r}
+accuracy(ar.fitted)
+```
+En comparación con el modelo de suavizado exponencial, el método ARIMA ofrece un mejor ajuste.
+
+### Representación de la serie real frente a la serie ajustada
+
+```{r}
+plot(gold_ts)
+lines(fitted(ar.fitted), col = "red")
+```
+
+### Cálculo de la predicción para h=2 instantes temporales futuros
+
+```{r}
+ar.pred <- predict(ar.fitted,n.ahead=2,prediction.interval=TRUE,level=0.95)
+```
+
+### Representación gráfica de la serie junto a la predicción obtenida
+
+```{r}
+plot(forecast(ar.fitted,h=2))
 ```
 
 # Serie temporal con tendencia + estacionalidad
@@ -224,7 +299,7 @@ El mejor modelo de suavizado exponencial será el modelo de Host-Winters con est
 Las ecuaciones de observación y actualización del modelo son las siguientes:
 
 $$
-\hat{x}_t = L_{t-1} + T_{t-1} + S_{t-c} +\epsilon_t, \epsilon_t \sim N(0,\sigma^2)
+\hat{x}_t = L_{t-1} + T_{t-1} + S_{t-c}
 $$
 
 $$
@@ -268,7 +343,7 @@ emp_fit$beta
 emp_fit$gamma
 ```
 
-Al ser $\beta = 0.055$ la tendencia es constante y como $\gamma = 1$, la estacionalidad la calculará a través de la diferencia entre el valor de $x_t$ y $L_t$.
+Al ser $\beta = 0.055$ la tendencia es constante y como $\gamma = 1$, el efecto estacional varía de año en año, y por tanto su actualización depende sólo del efecto estacionado en dicho instante, sin tener en cuenta el efecto estacional del año anterior.
 
 A partir de los coeficientes obtenidos calculamos las ecuaciones de actualización:
 
