@@ -22,6 +22,7 @@ Por otra parte, el dataset utilizado para la serie temporal con tendencia y esta
 # Carga de librerías
 
 ```{r}
+rm(list=ls())
 library(forecast)
 library(readr)
 library(lubridate)
@@ -197,13 +198,24 @@ Comparamos los resultados con la función auto.arima
 auto.arima(gold_ts)
 ```
 
-Debido a la poca diferencia entre los modelos detectados y el devuelto por la función auto.arima, se empleará el modelo AR(1).
+Debido a la poca diferencia entre los modelos detectados y el devuelto por la función auto.arima, se empleará el modelo ARIMA(1,1,0).
+
+Ecuación del modelo ARIMA(1,1,0):
+
+$$
+\text{Sea} \ Y_t = (1-B)X_t
+$$
+
+$$
+Y_t = 0.5048Y_{t-1} + \epsilon_t
+$$
 
 ### Cálculo de la bondad del ajuste
 
 ```{r}
 accuracy(ar.fitted)
 ```
+
 En comparación con el modelo de suavizado exponencial, el método ARIMA ofrece un mejor ajuste.
 
 ### Representación de la serie real frente a la serie ajustada
@@ -252,6 +264,8 @@ plot(decompose(HospEmp2010_ts, type="additive"))
 
 En base a la evolución temporal del número de empleados en la hostelería, se puede observar que existe una tendencia y una estacionalidad.
 
+## Modelo Holt-Winters
+
 ### Comparación de los modelos
 
 Modelo Holt-Winters con estacionalidad aditiva
@@ -294,7 +308,7 @@ $$
     Multiplicative & 5.668459 & 0.2562788 \\ \hline
 \end{tabular} 
 $$
-El mejor modelo de suavizado exponencial será el modelo de Host-Winters con estacionalidad aditiva pues la diferencia en el RMSE entre ambos modelos es muy pequeña, siendo más fácil la implementación del modelo con estacionalidad aditiva.
+El mejor modelo de suavizado exponencial será el modelo de Holt-Winters con estacionalidad aditiva pues la diferencia en el RMSE entre ambos modelos es muy pequeña, siendo más fácil la implementación del modelo con estacionalidad aditiva.
 
 Las ecuaciones de observación y actualización del modelo son las siguientes:
 
@@ -343,7 +357,7 @@ emp_fit$beta
 emp_fit$gamma
 ```
 
-Al ser $\beta = 0.055$ la tendencia es constante y como $\gamma = 1$, el efecto estacional varía de año en año, y por tanto su actualización depende sólo del efecto estacionado en dicho instante, sin tener en cuenta el efecto estacional del año anterior.
+Al ser $\beta = 0.055$, la tendencia es constante y como $\gamma = 1$, el efecto estacional varía de año en año, y por tanto su actualización depende sólo del efecto estacionado en dicho instante, sin tener en cuenta el efecto estacional del año anterior.
 
 A partir de los coeficientes obtenidos calculamos las ecuaciones de actualización:
 
@@ -366,6 +380,11 @@ $$
 ### Cálculo de la bondad del ajuste
 
 ```{r}
+cat("RMSE:",rmse_ad)
+cat("\nMAPE:",mape_ad)
+```
+
+```{r}
 fitval_emp <- fitted(emp_fit)
 tail(fitval_emp, 10)
 ```
@@ -381,6 +400,7 @@ plot(emp_fit)
 
 ```{r}
 pred_hosp <- predict(emp_fit,12)
+pred_hosp
 ```
 
 ### Representación de la predicción junto a la serie
@@ -390,3 +410,121 @@ pred <- predict(emp_fit,n.ahead=12,prediction.interval=TRUE,level=0.95)
 
 plot(emp_fit, pred)
 ```
+
+## Modelo sARIMA
+
+### Transformación de la serie hasta llegar a un proceso estacionario
+
+Como se ha visto anteriormente, se está frente a una serie temporal con estacionalidad con frecuencia igual a 12 y tendencia.
+
+De este modo, se aplicará una diferencia estacional.
+
+$$
+\nabla_{12} x_t = x_t-x_{t-12}
+$$
+
+```{r}
+HospEmp2010_12_ts <- diff(HospEmp2010_ts,12)
+plot(HospEmp2010_12_ts)
+```
+
+Asimismo, se deberá realizar otra diferencia para eliminar la tendencia.
+
+```{r}
+ndiffs(HospEmp2010_12_ts)
+```
+
+```{r}
+HospEmp2010_12_ts <- diff(HospEmp2010_12_ts,1)
+plot(HospEmp2010_12_ts)
+```
+
+### Representación gráfica e interpretación de la función de autocorrelación y de autocorrelación parcial
+
+```{r}
+acf(HospEmp2010_12_ts,lag.max = 48)
+```
+
+A partir de la función de correlación, se observa que existe un decrecimiento en la parte regular, por lo que se estaría ante un AR(). Sin embargo, también se puede interpretar que existe únicamente un coeficiente no nulo, lo que sería un MA(1).
+
+Por otro lado, respecto a la parte estacional, se encuentra un coeficiento no nulo, entonces tendremos un posible MA(1).
+
+```{r}
+pacf(HospEmp2010_12_ts, lag.max = 48)
+```
+
+En base a la función de correlación parcial, se atisba en la parte regular un coeficiente no nulo por lo que se corresponde al AR(1). No obstante, también se puede considerar el decrecimiento correspondiente al MA(1).
+
+Respecto a la parte estacional, se confirma el MA(1) pues se tiene un decrecimiento.
+
+De este modo, se tendrán como modelos a comprobar sARIMA(1,1,0)(0,1,1) y sARIMA(0,1,1)(0,1,1).
+
+### Obtención del modelo sARIMA que mejor describe la serie y su ecuación.
+
+Inicialmente se modelizará el sARIMA(1,1,0)(0,1,1):
+
+```{r}
+sarima1.fitted <- arima(HospEmp2010_ts, order = c(1,1,0),seasonal = list(order = c(0,1,1)))
+sarima1.fitted
+```
+
+Creación del sARIMA(0,1,1)(0,1,1)
+
+```{r}
+sarima2.fitted <- arima(HospEmp2010_ts, order = c(0,1,1),seasonal = list(order = c(0,1,1)))
+sarima2.fitted
+```
+
+Utilizamos auto.arima para comparar el modelo devuelto con los encontrados previamente.
+
+```{r}
+auto.arima(HospEmp2010_ts)
+```
+El modelo que se utilizará de ahora en adelante es el sARIMA(1,1,0)(0,1,1) pues es el que tiene mejor AIC y coincide con el devuelto por auto.arima.
+
+La ecuación siguiente es la correspondiente a la sARIMA(1,1,0)(0,1,1):
+
+$$
+\text{Sea} \ Y_t = (1-B^{12})(1-B)X_t
+$$
+
+$$
+(1-\phi_1B)Y_t = (1-\Theta_1B^{12})\epsilon_t
+$$
+
+Sustituyendo los valores:
+
+$$
+(1+0.1644B)Y_t = (1-0.4680B^{12})\epsilon_t
+$$
+
+### Cálculo de la bondad del ajuste
+
+```{r}
+accuracy(sarima1.fitted)
+```
+
+En comparación con el modelo de suavizado exponencial, el método ARIMA ofrece un mejor ajuste.
+
+### Representación de la serie real frente a la serie ajustada
+
+```{r}
+plot(HospEmp2010_ts)
+lines(fitted(sarima1.fitted), col = "red")
+```
+
+### Cálculo de la predicción para h=c instantes temporales futuros
+
+```{r}
+sarima1.pred <- predict(sarima1.fitted,n.ahead=12,prediction.interval=TRUE,level=0.95)
+sarima1.pred
+```
+
+### Representación gráfica de la serie junto a la predicción obtenida
+
+```{r}
+plot(forecast(sarima1.fitted,h=12))
+```
+
+
+
