@@ -237,6 +237,59 @@ ar.pred <- predict(ar.fitted,n.ahead=2,prediction.interval=TRUE,level=0.95)
 plot(forecast(ar.fitted,h=2))
 ```
 
+## Red neuronal autorregresiva no lineal
+
+### Modelo NAR por defecto
+```{r}
+fit.nar_gold <- nnetar(gold_ts)
+fit.nar_gold
+```
+
+### Modelo NAR que mejor describe la serie temporal
+```{r}
+errores_mape_gold <- list()
+
+for (p in 1:7){
+  for (k in 1:7){
+    fit.nar_g = nnetar(gold_ts, p=p, size=k)
+    errores_mape_gold[[paste("p", p, "_size", k)]] <- list(
+      p = p,
+      size = k,
+      mape_nar_g = accuracy(fit.nar_g)[5])
+  }
+}
+
+best_fit.nar_g <- errores_mape_gold[[which.min(sapply(errores_mape_gold, function(x) x$mape_nar_g))]]
+
+print(best_fit.nar_g)
+
+fit.nar_gold <- nnetar(gold_ts, p = best_fit.nar_g$p, size = best_fit.nar_g$size)
+```
+
+Tal y como se podía prever, un valor más alto de p y de k proporciona un error menor.
+
+### Cálculo de la bondad del ajuste
+```{r}
+accuracy(fit.nar_gold)
+```
+
+### Representación de la serie real frente a la ajustada
+```{r}
+fitval_nar_gold <- fitted.values(fit.nar_gold)
+
+plot(gold_ts,xlab="Año",ylab="Precio")
+lines(fitval_nar_gold, col="blue")
+abline(v=95)
+```
+
+Se ve un ajuste muy preciso conforme avanza la serie, que se debe a un posible sobreajuste debido a la utilización de valores de p y k demasiado elevados. En consecuencia, este modelo es el que realiza un mejor ajuste respecto a los modelos de suavizado exponencial y ARIMA. 
+
+### Predicción y representación para h=2 instantes temporales futuros
+```{r}
+pred <- forecast(fit.nar_gold, PI = TRUE, h=2)
+plot(pred)
+```
+
 # Serie temporal con tendencia + estacionalidad
 
 ### Importación y Adecuación de la serie
@@ -526,5 +579,57 @@ sarima1.pred
 plot(forecast(sarima1.fitted,h=12))
 ```
 
+## Red neuronal autorregresiva no lineal
 
+### Modelo NAR por defecto
+```{r}
+fit.nar_emp <- nnetar(HospEmp2010_ts)
+fit.nar_emp
+```
+
+### Modelo NAR que mejor describe la serie temporal
+```{r}
+errores_mape_emp <- list()
+
+for (p in 1:10){
+  for (P in 1:8){
+    for (k in 1:10){
+      fit.nar_e = nnetar(HospEmp2010_ts, p=p, P=P, size=k)
+      errores_mape_emp[[paste("p", p, "P", P, "_size", k)]] <- list(
+        p = p,
+        P = P,
+        size = k,
+        mape_nar_e = accuracy(fit.nar_e)[5])
+    }
+  }
+}
+
+best_fit.nar_e <- errores_mape_emp[[which.min(sapply(errores_mape_emp, function(x) x$mape_nar_e))]]
+
+print(best_fit.nar_e)
+
+fit.nar_emp <- nnetar(HospEmp2010_ts, p = best_fit.nar_e$p, P = best_fit.nar_e$P, size = best_fit.nar_e$size)
+```
+
+En este caso también se observa que, a nivel general, valores mayores de los distintos parámetros proporcionan un mejor ajuste. Así pues, en correspondencia con lo visto en la serie con tendencia, el modelo NAR realiza un mejor ajuste que los modelos de suavizado exponencial y ARIMA.
+
+### Cálculo de la bondad del ajuste
+```{r}
+accuracy(fit.nar_emp)
+```
+
+### Representación de la serie real frente a la ajustada
+```{r}
+fitval_nar_emp <- fitted.values(fit.nar_emp)
+
+plot(HospEmp2010_ts,xlab="Año",ylab="Empleados")
+lines(fitval_nar_emp, col="blue")
+abline(v=95)
+```
+
+### Predicción y representación para h=c instantes temporales futuros
+```{r}
+pred <- forecast(fit.nar_emp, PI = TRUE, h=12)
+plot(pred)
+```
 
